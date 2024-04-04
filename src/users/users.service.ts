@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,6 +15,54 @@ export class UsersService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
   ) {}
+
+  async findAll(query?: string) {
+    if (query) {
+      const rolesArray = this.userRepository.find({
+        where: {
+          role: query,
+        },
+      });
+      if ((await rolesArray).length === 0)
+        throw new NotFoundException('User Role Not Found');
+      return await rolesArray;
+    }
+    return await this.userRepository.find();
+  }
+
+  async findeOne(id: number) {
+    const user = this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User Not Found');
+    return await user;
+  }
+
+  async create(createUserDto: CreateUserDto) {
+    try {
+      const user = this.userRepository.create(createUserDto);
+      return await this.userRepository.save(user);
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        throw new ConflictException('Email already exists');
+      }
+      throw new InternalServerErrorException();
+    }
+  }
+
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user) throw new NotFoundException('User Not Found');
+
+    Object.assign(user, updateUserDto);
+    return await this.userRepository.save(user);
+  }
+
+  async delete(id: number) {
+    const removeUser = await this.findeOne(id);
+    return await this.userRepository.remove(removeUser);
+  }
+
+  //=========================================Static Data==================================================
 
   private users = [
     {
@@ -44,20 +97,6 @@ export class UsersService {
     },
   ];
 
-  async findAll(query?: string) {
-    if (query) {
-      const rolesArray = this.userRepository.find({
-        where: {
-          role: query,
-        },
-      });
-      if ((await rolesArray).length === 0)
-        throw new NotFoundException('User Role Not Found');
-      return await rolesArray;
-    }
-    return await this.userRepository.find();
-  }
-
   //   findAll(role?: 'INTERN' | 'ENGINEER' | 'ADMIN') {
   //     if (role) {
   //       const rolesArray = this.users.filter((user) => user.role === role);
@@ -68,16 +107,6 @@ export class UsersService {
   //     return this.users;
   //   }
 
-  async findeOne(id: number) {
-    const user = this.userRepository.findOne({ where: { id } });
-    if (!user) throw new NotFoundException('User Not Found');
-    return await user;
-  }
-
-  async create(createUserDto: CreateUserDto) {
-    const user = this.userRepository.create(createUserDto);
-    return await this.userRepository.save(user);
-  }
   //   create(createUserDto: CreateUserDto) {
   //     const userByHighestId = [...this.users].sort((a, b) => b.id - a.id);
   //     const newUser = {
@@ -89,14 +118,6 @@ export class UsersService {
   //     return newUser;
   //   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
-    const user = await this.userRepository.findOne({ where: { id } });
-
-    if (!user) throw new NotFoundException('User Not Found');
-
-    Object.assign(user, updateUserDto);
-    return await this.userRepository.save(user);
-  }
   //   update(id: number, updateUserDto: UpdateUserDto) {
   //     this.users = this.users.map((user) => {
   //       if (user.id === id) {
@@ -106,10 +127,7 @@ export class UsersService {
   //     });
   //     return this.findeOne(id);
   //   }
-  async delete(id: number) {
-    const removeUser = await this.findeOne(id);
-    return await this.userRepository.remove(removeUser);
-  }
+
   //   delete(id: number) {
   //     const removeUser = this.findeOne(id);
   //     this.users.filter((user) => user.id !== id);
